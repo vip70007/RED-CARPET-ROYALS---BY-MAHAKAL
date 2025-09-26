@@ -1,0 +1,201 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MAHAKAL Card Flip</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #b30000;
+      color: #fff;
+    }
+    h1 { color: #ffcc00; }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 10px;
+    }
+    #cards-container {
+      margin-top: 20px;
+      display: none;
+    }
+    #cards {
+      display: grid;
+      grid-template-columns: repeat(4, 150px);
+      grid-gap: 15px;
+      justify-content: center;
+    }
+    .card {
+      width: 150px;
+      height: 220px;
+      perspective: 1000px;
+      cursor: pointer;
+    }
+    .card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.8s;
+      transform-style: preserve-3d;
+    }
+    .card.flipped .card-inner {
+      transform: rotateY(180deg);
+    }
+    .card-front, .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 10px;
+    }
+    .card-back {
+      transform: rotateY(0deg);
+    }
+    .card-front {
+      transform: rotateY(180deg);
+    }
+    #countdown {
+      margin-top: 20px;
+      font-size: 20px;
+      color: #ffcc00;
+    }
+  </style>
+</head>
+<body>
+  <h1>MAHAKAL RED CARPET ROYALS</h1>
+  <input type="text" id="mobileNumber" placeholder="Enter Mobile Number">
+  <button onclick="startGame()">Start Game</button>
+  <div id="mobileDisplay"></div>
+  <div id="cards-container">
+    <div id="cards"></div>
+  </div>
+  <div id="countdown"></div>
+
+  <audio id="flipSound" src="flip.mp3" preload="auto"></audio>
+
+  <script>
+    let lockedNumbers = JSON.parse(localStorage.getItem("lockedNumbers")) || {};
+
+    function saveData() {
+      localStorage.setItem("lockedNumbers", JSON.stringify(lockedNumbers));
+    }
+
+    function startGame() {
+      let number = document.getElementById('mobileNumber').value;
+      if (!number) { alert("Enter mobile number"); return; }
+
+      if (lockedNumbers[number] && lockedNumbers[number].locked) {
+        alert("This number is locked. Please wait for unlock.");
+        return;
+      }
+
+      if (!lockedNumbers[number]) {
+        lockedNumbers[number] = { locked: false, flips: 0, endTime: null };
+        saveData();
+      }
+
+      document.getElementById('mobileDisplay').innerHTML = "<h2>Mobile: " + number + "</h2>";
+      document.getElementById('cards-container').style.display = "block";
+      loadCards(number);
+    }
+
+    function startCountdown(seconds, number) {
+      const display = document.getElementById('countdown');
+
+      function updateTimer() {
+        let now = Math.floor(Date.now() / 1000);
+        let remaining = lockedNumbers[number].endTime - now;
+
+        if (remaining <= 0) {
+          lockedNumbers[number].locked = false;
+          lockedNumbers[number].flips = 0;
+          lockedNumbers[number].endTime = null;
+          saveData();
+          display.textContent = "Unlocked! You can play again.";
+          clearInterval(lockedNumbers[number].interval);
+          return;
+        }
+
+        let days = Math.floor(remaining / (24*60*60));
+        let hrs = Math.floor((remaining % (24*60*60)) / 3600);
+        let mins = Math.floor((remaining % 3600) / 60);
+        let secs = remaining % 60;
+        display.textContent = "Lockout Time: " + days + "d " + hrs + "h " + mins + "m " + secs + "s";
+      }
+
+      if (lockedNumbers[number].interval) clearInterval(lockedNumbers[number].interval);
+      lockedNumbers[number].interval = setInterval(updateTimer, 1000);
+      updateTimer();
+    }
+
+    function loadCards(number) {
+      // 12 cards only
+      let allCards = [
+        "JC.png","JD.png","JH.png","JS.png",
+        "QC.png","QD.png","QH.png","QS.png",
+        "KC.png","KD.png","KH.png","KS.png"
+      ];
+
+      allCards = allCards.sort(() => Math.random() - 0.5);
+
+      const container = document.getElementById("cards");
+      container.innerHTML = "";
+
+      allCards.forEach(card => {
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `
+          <div class="card-inner">
+            <div class="card-back"><img src="cards/back.png" width="150" height="220"></div>
+            <div class="card-front"><img src="cards/${card}" width="150" height="220"></div>
+          </div>`;
+        
+        div.addEventListener("click", function() {
+          if (div.classList.contains("flipped")) return;
+          if (lockedNumbers[number].locked) { alert("This number is locked. Wait for unlock."); return; }
+          if (lockedNumbers[number].flips >= 3) { alert("You already flipped 3 cards."); return; }
+
+          div.classList.add("flipped");
+          document.getElementById("flipSound").play();
+
+          lockedNumbers[number].flips++;
+          saveData();
+
+          if (lockedNumbers[number].flips >= 3) {
+            lockedNumbers[number].locked = true;
+            lockedNumbers[number].endTime = Math.floor(Date.now() / 1000) + (7*24*60*60);
+            saveData();
+            startCountdown(7*24*60*60, number);
+          }
+        });
+
+        container.appendChild(div);
+      });
+
+      if (lockedNumbers[number].locked && lockedNumbers[number].endTime) {
+        startCountdown(lockedNumbers[number].endTime - Math.floor(Date.now()/1000), number);
+      } else {
+        document.getElementById('countdown').textContent = "";
+      }
+    }
+
+    // Restore countdown if page refresh
+    window.onload = function() {
+      Object.keys(lockedNumbers).forEach(num => {
+        if (lockedNumbers[num].locked && lockedNumbers[num].endTime) {
+          let remaining = lockedNumbers[num].endTime - Math.floor(Date.now()/1000);
+          if (remaining > 0) {
+            startCountdown(remaining, num);
+          } else {
+            lockedNumbers[num].locked = false;
+            lockedNumbers[num].flips = 0;
+            lockedNumbers[num].endTime = null;
+            saveData();
+          }
+        }
+      });
+    };
+  </script>
+</body>
+</html>
