@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MAHAKAL Card Flip</title>
+<style>
+body { font-family: Arial, sans-serif; text-align:center; background:#b30000; color:#fff; }
+h1{color:#ffcc00;} input,button{padding:10px;font-size:16px;margin:10px;}
+#cards-container{margin-top:20px;display:none;}
+#cards{display:grid; grid-template-columns:repeat(4,150px); grid-gap:15px; justify-content:center;}
+.card{width:150px;height:220px; perspective:1000px; cursor:pointer;}
+.card-inner{position:relative;width:100%;height:100%; transition:transform 0.8s; transform-style:preserve-3d;}
+.card.flipped .card-inner{transform:rotateY(180deg);}
+.card-front,.card-back{position:absolute;width:100%;height:100%; backface-visibility:hidden; border-radius:10px;}
+.card-back{transform:rotateY(0deg);}
+.card-front{transform:rotateY(180deg);}
+#countdown{margin-top:20px;font-size:20px;color:#ffcc00;}
+#adminPanelOverlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:9999;}
+#adminPanel{background:#111;color:#fff;padding:20px;border-radius:8px;width:90%;max-width:1000px;max-height:80vh;overflow:auto;text-align:left;}
+#adminPanel h2{margin-top:0;color:#ffcc00;}
+table{width:100%;border-collapse:collapse;margin-top:10px;color:#fff;}
+th,td{border:1px solid #333;padding:8px;font-size:14px;}
+th{background:#2a2a2a;color:#ffcc00;}
+.close-btn,.delete-btn{float:right;margin-left:5px;border:none;padding:6px 10px;cursor:pointer;border-radius:4px;}
+.close-btn{background:#ff6666;color:#111;}
+.delete-btn{background:#ffcc00;color:#111;}
+</style>
+</head>
+<body>
+
+<h1>MAHAKAL RED CARPET ROYALS</h1>
+<input type="text" id="mobileNumber" placeholder="Enter Mobile Number" maxlength="10" inputmode="numeric">
+<button onclick="startGame()">Start Game</button>
+<button onclick="adminLogin()">Admin Login</button>
+
+<div id="mobileDisplay"></div>
+<div id="cards-container"><div id="cards"></div></div>
+<div id="countdown"></div>
+
+<audio id="flipSound" src="flip.mp3" preload="auto"></audio>
+
+<!-- Admin Panel -->
+<div id="adminPanelOverlay">
+  <div id="adminPanel">
+    <button class="close-btn" onclick="closeAdminPanel()">Close</button>
+    <button class="delete-btn" onclick="deleteHistory()">Delete History</button>
+    <h2>Admin - History</h2>
+    <div id="adminContent"></div>
+  </div>
+</div>
+
+<script>
+let lockedNumbers=JSON.parse(localStorage.getItem("lockedNumbers"))||{};
+function saveData(){localStorage.setItem("lockedNumbers",JSON.stringify(lockedNumbers));}
+
+function startGame(){
+let number=document.getElementById('mobileNumber').value.trim();
+if(!/^\d{10}$/.test(number)){alert("Enter valid 10-digit number.");return;}
+if(lockedNumbers[number]&&lockedNumbers[number].locked){
+alert("This number is locked. Please wait.");
+startCountdown(lockedNumbers[number].endTime-Math.floor(Date.now()/1000),number);
+return;}
+if(!lockedNumbers[number]){lockedNumbers[number]={locked:false,flips:0,endTime:null,results:[]};saveData();}
+document.getElementById('mobileDisplay').innerHTML="<h2>Mobile: "+number+"</h2>";
+document.getElementById('cards-container').style.display="block";
+loadCards(number);
+}
+
+function startCountdown(seconds,number){
+const display=document.getElementById('countdown');
+function updateTimer(){
+let now=Math.floor(Date.now()/1000);
+let remaining=lockedNumbers[number].endTime-now;
+if(remaining<=0){
+lockedNumbers[number].locked=false;lockedNumbers[number].flips=0;lockedNumbers[number].results=[];lockedNumbers[number].endTime=null;saveData();
+display.textContent="Unlocked! You can play again.";clearInterval(lockedNumbers[number].interval);return;}
+let d=Math.floor(remaining/86400); let h=Math.floor((remaining%86400)/3600); let m=Math.floor((remaining%3600)/60); let s=remaining%60;
+display.textContent=`Lockout Time: ${d}d ${h}h ${m}m ${s}s`;
+}
+if(lockedNumbers[number].interval) clearInterval(lockedNumbers[number].interval);
+lockedNumbers[number].interval=setInterval(updateTimer,1000);
+updateTimer();
+}
+
+function loadCards(number){
+let allCards=["JC.png","JD.png","JH.png","JS.png","QC.png","QD.png","QH.png","QS.png","KC.png","KD.png","KH.png","KS.png"];
+allCards=allCards.sort(()=>Math.random()-0.5);
+const container=document.getElementById("cards"); container.innerHTML="";
+allCards.forEach(card=>{
+const div=document.createElement("div");
+div.className="card";
+div.innerHTML=`
+<div class="card-inner">
+<div class="card-back"><img src="back.png" width="150" height="220"></div>
+<div class="card-front"><img src="${card}" width="150" height="220"></div>
+</div>`;
+div.addEventListener("click",function(){
+if(div.classList.contains("flipped")) return;
+if(lockedNumbers[number].locked){ alert("Locked. Wait."); return; }
+if(lockedNumbers[number].flips>=3){ alert("You already flipped 3 cards."); return; }
+div.classList.add("flipped"); document.getElementById("flipSound").play();
+lockedNumbers[number].flips++;
+if(!lockedNumbers[number].results) lockedNumbers[number].results=[];
+lockedNumbers[number].results.push(card); saveData();
+if(lockedNumbers[number].flips>=3){ lockedNumbers[number].locked=true; lockedNumbers[number].endTime=Math.floor(Date.now()/1000)+(7*24*60*60); saveData(); startCountdown(7*24*60*60,number);}
+});
+container.appendChild(div);
+});
+if(lockedNumbers[number].locked && lockedNumbers[number].endTime){startCountdown(lockedNumbers[number].endTime-Math.floor(Date.now()/1000),number);}
+else{document.getElementById('countdown').textContent="";}
+}
+
+// Input validation
+window.onload=function(){
+const mobileInput=document.getElementById('mobileNumber');
+mobileInput.addEventListener('input',function(){let cleaned=this.value.replace(/\D/g,'').slice(0,10);if(this.value!==cleaned)this.value=cleaned;});
+mobileInput.addEventListener('keypress',function(e){if(!/^[0-9]$/.test(e.key)){e.preventDefault();return;}if(this.selectionStart===this.selectionEnd && this.value.length>=10)e.preventDefault();});
+mobileInput.addEventListener('paste',function(e){e.preventDefault();const paste=(e.clipboardData||window.clipboardData).getData('text');const cleaned=paste.replace(/\D/g,'').slice(0,10);const start=this.selectionStart,end=this.selectionEnd;this.value=(this.value.slice(0,start)+cleaned+this.value.slice(end)).replace(/\D/g,'').slice(0,10);});
+Object.keys(lockedNumbers).forEach(num=>{if(lockedNumbers[num].locked && lockedNumbers[num].endTime){let remaining=lockedNumbers[num].endTime-Math.floor(Date.now()/1000);if(remaining>0) startCountdown(remaining,num);else{lockedNumbers[num].locked=false;lockedNumbers[num].flips=0;lockedNumbers[num].results=[];lockedNumbers[num].endTime=null; saveData();}}});
+}
+
+// Admin panel
+function adminLogin(){let pwd=prompt("Enter admin password:"); if(pwd===null) return; if(pwd==="vipin@2025") openAdminPanel(); else alert("Incorrect password.");}
+function openAdminPanel(){document.getElementById('adminPanelOverlay').style.display="flex"; renderAdminHistory();}
+function closeAdminPanel(){document.getElementById('adminPanelOverlay').style.display="none";}
+
+function renderAdminHistory(){
+const container=document.getElementById('adminContent'); let data=JSON.parse(localStorage.getItem("lockedNumbers"))||{};
+if(Object.keys(data).length===0){container.innerHTML="<p>No history found.</p>"; return;}
+let html=`<table><thead><tr>
+<th>Mobile Number</th><th>Flips</th><th>Locked</th><th>Lock End Time (UTC)</th><th>Results</th>
+</tr></thead><tbody>`;
+Object.keys(data).forEach(num=>{
+let entry=data[num]; let endTimeText=entry.endTime?new Date(entry.endTime*1000).toUTCString():"-";
+let resultsText=(entry.results && entry.results.length>0)?entry.results.join(", "):"-";
+html+=`<tr>
+<td>${num}</td><td>${entry.flips||0}</td><td>${entry.locked?"Yes":"No"}</td><td>${endTimeText}</td><td>${resultsText}</td>
+</tr>`;
+});
+html+="</tbody></table>"; container.innerHTML=html;
+}
+
+function deleteHistory(){if(confirm("Are you sure you want to delete all history?")){localStorage.removeItem("lockedNumbers"); lockedNumbers={}; renderAdminHistory(); alert("History deleted successfully.");}}
+</script>
+</body>
+</html>
